@@ -169,4 +169,3 @@ Be mindful of security considerations, such as securing your JWTs, using HTTPS, 
 Deploy your NestJS application to a production server, considering security best practices and scalability.
 
 <p>This is a high-level overview of how to build an authentication project with NestJS, Prisma, PostgreSQL, JWT, and cookies. The specific implementation details and code will depend on your project's requirements and your familiarity with these technologies.</p>
-
