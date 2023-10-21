@@ -1,12 +1,13 @@
-import { Module } from '@nestjs/common';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { UserService } from 'src/user/UserService'; 
-import { PrismaService } from 'src/prisma.service';
-import { JwtService } from '@nestjs/jwt';
+import { HttpModule } from '@nestjs/axios'
+import { forwardRef, Module } from '@nestjs/common'
+import { UserModule } from '../user/user.module'
+import { AuthController } from './auth.controller'
+import { AuthService } from './auth.service'
+import { IntraStrategy } from './strategy/auth.strategy'
 
 @Module({
-  controllers: [AuthController],
-  providers: [AuthService, UserService, PrismaService, JwtService],
+	imports: [forwardRef(() => UserModule), HttpModule],
+	controllers: [AuthController],
+	providers: [IntraStrategy, AuthService],
 })
 export class AuthModule {}
