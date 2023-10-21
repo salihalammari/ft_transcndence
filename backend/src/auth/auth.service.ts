@@ -1,69 +1,17 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { LoginDto } from './dto/auth.dto';
-import { UserService } from 'src/user/UserService';
-import { compare } from 'bcrypt';
-import { JwtService } from '@nestjs/jwt';
-
-const EXPIRE_TIME = 20 * 1000;
+import { Injectable } from '@nestjs/common'
+import { User42Dto } from '../user/dto/user42.dto'
+import { UserService } from '../user/user.service'
+import { User } from '../user/entities/user.entity'
 
 @Injectable()
 export class AuthService {
-  constructor(
-    private userService: UserService,
-    private jwtService: JwtService,
-  ) {}
+	constructor(private userService: UserService) {}
 
-  async login(dto: LoginDto) {
-    const user = await this.validateUser(dto);
-    const payload = {
-      username: user.email,
-      sub: {
-        name: user.name,
-      },
-    };
+	async validateUser(userData: User42Dto): Promise<User> {
+		return this.userService.validateUser42(userData)
+	}
 
-    return {
-      user,
-      backendTokens: {
-        accessToken: await this.jwtService.signAsync(payload, {
-          expiresIn: '20s',
-          secret: process.env.jwtSecretKey,
-        }),
-        refreshToken: await this.jwtService.signAsync(payload, {
-          expiresIn: '7d',
-          secret: process.env.jwtRefreshTokenKey,
-        }),
-        expiresIn: new Date().setTime(new Date().getTime() + EXPIRE_TIME),
-      },
-    };
-  }
-
-  async validateUser(dto: LoginDto) {
-    const user = await this.userService.findByEmail(dto.username);
-
-    if (user && (await compare(dto.password, user.password))) {
-      const { password, ...result } = user;
-      return result;
-    }
-    throw new UnauthorizedException();
-  }
-
-  async refreshToken(user: any) {
-    const payload = {
-      username: user.username,
-      sub: user.sub,
-    };
-
-    return {
-      accessToken: await this.jwtService.signAsync(payload, {
-        expiresIn: '20s',
-        secret: process.env.jwtSecretKey,
-      }),
-      refreshToken: await this.jwtService.signAsync(payload, {
-        expiresIn: '7d',
-        secret: process.env.jwtRefreshTokenKey,
-      }),
-      expiresIn: new Date().setTime(new Date().getTime() + EXPIRE_TIME),
-    };
-  }
+	createUser(userData: User42Dto): Promise<User> {
+		return this.userService.createUser42(userData)
+	}
 }
