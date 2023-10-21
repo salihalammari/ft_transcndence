@@ -1,48 +1,99 @@
-import { Body, Controller, Post,Get ,Request, UseGuards } from '@nestjs/common';
-import { CreateUserDto } from 'src/user/dto/dto/user.dto';
-import { UserService } from 'src/user/UserService';
-import { LoginDto } from './dto/auth.dto';
-import { AuthService } from './auth.service';
-import { RefreshJwtGuard } from './guards/refresh.guard';
-import { FortyTwoIntranetStrategy } from './42-intranet.strategy';
+import {
+	Controller,
+	Get,
+	Param,
+	Post,
+	Res,
+	UseGuards,
+	Req,
+} from '@nestjs/common'
+import { Response, Request } from 'express'
+import { IntraAuthGuard } from './guards/auth.guard'
+import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger'
+import { HttpService } from '@nestjs/axios'
+import { JwtPayload } from '../user/interfaces/jwt-payload.interface'
+import { JwtService } from '@nestjs/jwt'
+import { AuthGuard } from '@nestjs/passport'
+import { User } from 'src/user/entities/user.entity'
 
-@Controller('auth')
+@ApiTags('42 authentication')
+@Controller('api/auth/')
 export class AuthController {
-  constructor(
-    private userService: UserService,
-    private authService: AuthService,
-  ) {}
+	constructor(
+		private httpService: HttpService,
+		private jwtService: JwtService,
+	) {}
 
-  @Post('register')
-  async registerUser(@Body() dto: CreateUserDto) {
-    return await this.userService.create(dto);
-  }
+	@ApiOperation({ summary: 'Authentication with 42 Api' })
+	@Get('42/login')
+	@UseGuards(IntraAuthGuard)
+	login() {
+		return 'login'
+	}
 
-  @Post('login')
-  async login(@Body() dto: LoginDto) {
-    return await this.authService.login(dto);
-  }
+	@ApiOperation({
+		summary: 'Redirection to front home page after 42 authentication',
+	})
+	@Get('redirect')
+	@UseGuards(IntraAuthGuard)
+	async redirect(
+		@Res({ passthrough: true }) res: Response,
+		@Req() req: Request,
+	) {
+		console.log(req)
+		const username = req.user['username']
+		const userid = req.user['userId']
+		const auth = false
+		const payload: JwtPayload = { username, auth, userid }
+		console.log(payload)
+		const accessToken: string = await this.jwtService.sign(payload)
+		res.cookie('jwt', accessToken, { httpOnly: true })
+		res.redirect(process.env.IP_FRONTEND)
+	}
 
-  @UseGuards(RefreshJwtGuard)
-  @Post('refresh')
-  async refreshToken(@Request() req) {
-    console.log('refreshed');
+	// two factor authentication
+	@ApiOperation({ summary: 'QR code authentication - User' })
+	@UseGuards(AuthGuard('jwt'))
+	@Get('2fa')
+	async getQrcode(@Req() req) {
+		const user: User = req.user
+		const resp = await this.httpService
+			.get(
+				`https://www.authenticatorApi.com/pair.aspx?AppName=${process.env.TWO_FACTOR_AUTH_APP_NAME}&AppInfo=${user.username}&SecretCode=${user.userId}`,
+			)
+			.toPromise()
+		return resp.data
+	}
 
-    return await this.authService.refreshToken(req.user);
-  }
-
-  @Get('42-intranet')
-  @UseGuards(FortyTwoIntranetStrategy)
-  fortyTwoIntranetLogin() {
-    // The 42 Intranet strategy will handle the redirection to the 42 Intranet for OAuth authentication.
-  }
-  @Get('42-intranet/callback')
-  @UseGuards(FortyTwoIntranetStrategy)
-  fortyTwoIntranetLoginCallback(@Req() req) {
-    // This route will be used as the callback URL by the 42 Intranet after authentication.
-    // Handle the callback, create or find the user, and issue a JWT.
-    return this.fortyTwoIntranetStrategy.authenticate()(req);
-  }
+	@ApiOperation({ summary: 'Code authentication - Secret' })
+	@ApiParam({
+		name: 'secret',
+		required: true,
+		description: 'Code authentication - Google Authenticator',
+	})
+	@UseGuards(AuthGuard('jwt'))
+	@Post('2fa/:secret')
+	async validate(
+		@Param('secret') secret,
+		@Req() req,
+		@Res({ passthrough: true }) res: Response,
+	) {
+		const user: User = req.user
+		const resp = await this.httpService
+			.get(
+				`https://www.authenticatorApi.com/Validate.aspx?Pin=${secret}&SecretCode=${user.userId}`,
+			)
+			.toPromise()
+		if (resp.data === 'True') {
+			const username = user.username
+			const userid = user.userId
+			const auth = true
+			const payload: JwtPayload = { username, auth, userid }
+			const accessToken: string = await this.jwtService.sign(payload)
+			res.cookie('jwt', accessToken, { httpOnly: true })
+		}
+		return resp.data
+	}
 }
 
 
