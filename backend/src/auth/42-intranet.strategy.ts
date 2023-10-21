@@ -13,6 +13,7 @@ export class FortyTwoIntranetStrategy extends PassportStrategy(Strategy, '42-int
       clientID: process.env.FORTYTWO_CLIENT_ID,
       clientSecret: process.env.FORTYTWO_CLIENT_SECRET,
       callbackURL: 'http://localhost:3000/auth/42-intranet/callback',
+      scope: ['public'],
     });
   }
 
