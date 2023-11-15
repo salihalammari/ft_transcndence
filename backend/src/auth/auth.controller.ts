@@ -1,105 +1,96 @@
 import {
-	Controller,
-	Get,
-	Param,
-	Post,
-	Res,
-	UseGuards,
-	Req,
-} from '@nestjs/common'
-import { Response, Request } from 'express'
-import { IntraAuthGuard } from './guards/auth.guard'
-import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger'
-import { HttpService } from '@nestjs/axios'
-import { JwtPayload } from '../user/interfaces/jwt-payload.interface'
-import { JwtService } from '@nestjs/jwt'
-import { AuthGuard } from '@nestjs/passport'
-import { User } from 'src/user/entities/user.entity'
-
-@ApiTags('42 authentication')
-@Controller('api/auth/')
+  Controller,
+  Get,
+  Body,
+  Req,
+  Post,
+  Res,
+  UseGuards,
+  UnauthorizedException,
+  HttpCode,
+} from "@nestjs/common";
+import { AuthGuard } from "@nestjs/passport";
+import { Response } from 'express';
+import { AuthService } from "./auth.service";
+import { UserService } from "src/users/user.service";
+import { JwtGuard } from "./guard";
+import { Jwt2faAuthGuard } from "./2FA/jwt-2fa-auth.guard";
+import { User } from "@prisma/client";
+@Controller("auth")
 export class AuthController {
-	constructor(
-		private httpService: HttpService,
-		private jwtService: JwtService,
-	) {}
+  userService: any;
+  constructor(
+    private authService: AuthService,
+    ) {}
 
-	@ApiOperation({ summary: 'Authentication with 42 Api' })
-	@Get('42/login')
-	@UseGuards(IntraAuthGuard)
-	login() {
-		return 'login'
-	}
+  @Get('login42')
+  @UseGuards(AuthGuard('42-intranet'))
+  @HttpCode(200)
+  async loginWith42(@Req() req) {
+  // console.log("login here")
+    const userWithoutPsw: Partial<User> = req.user;
 
-	@ApiOperation({
-		summary: 'Redirection to front home page after 42 authentication',
-	})
-	@Get('redirect')
-	@UseGuards(IntraAuthGuard)
-	async redirect(
-		@Res({ passthrough: true }) res: Response,
-		@Req() req: Request,
-	) {
-		console.log(req)
-		const username = req.user['username']
-		const userid = req.user['userId']
-		const auth = false
-		const payload: JwtPayload = { username, auth, userid }
-		console.log(payload)
-		const accessToken: string = await this.jwtService.sign(payload)
-		res.cookie('jwt', accessToken, { httpOnly: true })
-		res.redirect(process.env.IP_FRONTEND)
-	}
+    return this.authService.loginWith2fa(userWithoutPsw); 
+  }
+  @Post('2fa/generate')
+  @UseGuards(AuthGuard)
+  async register(@Res() Res, @Req() req) {
+    const { otpAuthUrl } =
+      await this.authService.generateTwoFactorAuthSecret(
+        req.user,
+      );
 
-	// two factor authentication
-	@ApiOperation({ summary: 'QR code authentication - User' })
-	@UseGuards(AuthGuard('jwt'))
-	@Get('2fa')
-	async getQrcode(@Req() req) {
-		const user: User = req.user
-		const resp = await this.httpService
-			.get(
-				`https://www.authenticatorApi.com/pair.aspx?AppName=${process.env.TWO_FACTOR_AUTH_APP_NAME}&AppInfo=${user.username}&SecretCode=${user.userId}`,
-			)
-			.toPromise()
-		return resp.data
-	}
+    return Res.json(
+      await this.authService.generateQrCodeDataURL(otpAuthUrl),
+    );
+  }
 
-	@ApiOperation({ summary: 'Code authentication - Secret' })
-	@ApiParam({
-		name: 'secret',
-		required: true,
-		description: 'Code authentication - Google Authenticator',
-	})
-	@UseGuards(AuthGuard('jwt'))
-	@Post('2fa/:secret')
-	async validate(
-		@Param('secret') secret,
-		@Req() req,
-		@Res({ passthrough: true }) res: Response,
-	) {
-		const user: User = req.user
-		const resp = await this.httpService
-			.get(
-				`https://www.authenticatorApi.com/Validate.aspx?Pin=${secret}&SecretCode=${user.userId}`,
-			)
-			.toPromise()
-		if (resp.data === 'True') {
-			const username = user.username
-			const userid = user.userId
-			const auth = true
-			const payload: JwtPayload = { username, auth, userid }
-			const accessToken: string = await this.jwtService.sign(payload)
-			res.cookie('jwt', accessToken, { httpOnly: true })
-		}
-		return resp.data
-	}
+  @Post('2fa/turn-on')
+  @UseGuards(AuthGuard)
+  async turnOnTwoFactorAuthentication(@Req() req, @Body() body) {
+    const isCodeValid =
+      this.authService.isTwoFactorAuthCodeValid(
+        body.twoFactorAuthCode,
+        req.user,
+      );
+    if (!isCodeValid) {
+      throw new UnauthorizedException('Wrong authentication code');
+    }
+    await this.userService.turnOnTwoFactorAuth(req.user.id);
+  }
+  @Post('2fa/authenticate')
+  @HttpCode(200)
+  @UseGuards(AuthGuard)
+  async authenticate(@Req() req, @Body() body) {
+    const isCodeValid = this.authService.isTwoFactorAuthCodeValid(
+      body.twoFactorAuthenticationCode,
+      req.user,
+    );
+    if (!isCodeValid) {
+      throw new UnauthorizedException('Wrong authentication code');
+    }
+    return this.authService.loginWith2fa(req.user);
+  }
+  @Get('42-intranet/callback')
+  @UseGuards(AuthGuard('42-intranet'))
+  async callbackWith42(@Req() req: any,@Res() res: Response) { 
+    // console.log("profil howa niit ?? :",req.user);
+    const ret = await this.authService.valiadteUserAndCreateJWT(req.user);
+      // console.log(ret);
+      if (ret != null){
+        // res.cookie("auth",ret);
+      }
+      res.cookie('intra_id', req.user.accessToken);
+      res.cookie('access_token', ret.access_token);
+      // req.cookies(accessToken:'accessToken' ,JWT_SECRET);
+    res.redirect("http://localhost:3000/protected/settingspage");
+    // res.redirect("http://www.google.com"); 
+    // res.send(ret)
+  }
 }
-
-
 
 //prisma
 //dto
 // jwt
 // guardes
-// pipes
+// pipes 
