@@ -6,7 +6,7 @@ module.exports = {
     './components/**/*.{ts,tsx}',
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
-	],
+  ],
   theme: {
     container: {
       center: true,
@@ -15,6 +15,10 @@ module.exports = {
         "2xl": "1400px",
       },
     },
+    fontWeight: {
+      '400': 400,
+      '700': 700,
+    },
     extend: {
       colors: {
         'color-main': '#151B2D',
@@ -22,7 +26,7 @@ module.exports = {
         'color-main-dark': '#111623',
         'color-main-whith': '#4069FF',
         'color-main-whith2': '#8CA5FF',
-       
+
       },
       keyframes: {
         "accordion-down": {

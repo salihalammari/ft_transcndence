@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ChannelService } from './channel.service';
 import { ChannelController } from './channel.controller';
-import { UserModule } from 'src/users/user.module';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Module({
-  imports:[UserModule],
   controllers: [ChannelController],
-  providers: [ChannelService],
+  providers: [ChannelService, NotificationService],
   exports: [ChannelService]
 })
 export class ChannelModule { }

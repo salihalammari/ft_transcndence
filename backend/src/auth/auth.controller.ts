@@ -1,96 +1,101 @@
 import {
   Controller,
   Get,
-  Body,
-  Req,
-  Post,
-  Res,
-  UseGuards,
-  UnauthorizedException,
   HttpCode,
+  Param,
+  Post,
+  Req,
+  Res,
+  UseGuards
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
-import { Response } from 'express';
+import { Request, Response } from "express";
+import { UserService } from "src/user/user.service";
 import { AuthService } from "./auth.service";
-import { UserService } from "src/users/user.service";
-import { JwtGuard } from "./guard";
-import { Jwt2faAuthGuard } from "./2FA/jwt-2fa-auth.guard";
-import { User } from "@prisma/client";
+import { JwtGuard } from "./guard/jwt.guard";
+
 @Controller("auth")
 export class AuthController {
-  userService: any;
   constructor(
     private authService: AuthService,
-    ) {}
+    private userService: UserService
+  ) { }
 
-  @Get('login42')
-  @UseGuards(AuthGuard('42-intranet'))
+  @Get("login42")
+  @UseGuards(AuthGuard("42-intranet"))
   @HttpCode(200)
-  async loginWith42(@Req() req) {
-  // console.log("login here")
-    const userWithoutPsw: Partial<User> = req.user;
-
-    return this.authService.loginWith2fa(userWithoutPsw); 
-  }
-  @Post('2fa/generate')
-  @UseGuards(AuthGuard)
-  async register(@Res() Res, @Req() req) {
-    const { otpAuthUrl } =
-      await this.authService.generateTwoFactorAuthSecret(
-        req.user,
-      );
-
-    return Res.json(
-      await this.authService.generateQrCodeDataURL(otpAuthUrl),
-    );
+  async loginWith42() {
   }
 
-  @Post('2fa/turn-on')
-  @UseGuards(AuthGuard)
-  async turnOnTwoFactorAuthentication(@Req() req, @Body() body) {
-    const isCodeValid =
-      this.authService.isTwoFactorAuthCodeValid(
-        body.twoFactorAuthCode,
-        req.user,
-      );
-    if (!isCodeValid) {
-      throw new UnauthorizedException('Wrong authentication code');
-    }
-    await this.userService.turnOnTwoFactorAuth(req.user.id);
-  }
-  @Post('2fa/authenticate')
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
   @HttpCode(200)
-  @UseGuards(AuthGuard)
-  async authenticate(@Req() req, @Body() body) {
-    const isCodeValid = this.authService.isTwoFactorAuthCodeValid(
-      body.twoFactorAuthenticationCode,
-      req.user,
+  async googleAuth() {
+  }
+
+  @Get("stategies/google/callback")
+  @UseGuards(AuthGuard("google"))
+  async callbackGoogle(@Req() req: any, @Res() res: Response) {
+    this.authService.callbackStratiegs(req, res);
+  }
+
+  @Get("stategies/42/callback")
+  @UseGuards(AuthGuard("42-intranet"))
+  async callbackIntra42(@Req() req: any, @Res() res: Response) {
+    this.authService.callbackStratiegs(req, res);
+  }
+
+
+
+  @Get("2fa/generate")
+  @UseGuards(JwtGuard)
+  async register(@Req() req: Request) {
+    const { otpAuthUrl } = await this.authService.generateTwoFactorAuthSecret(
+      req.user
+    );
+    const qrcode = await this.authService.generateQrCodeDataURL(otpAuthUrl);
+    return qrcode;
+  }
+
+
+  @Get("2fa/turnOn/:intra_id/:authCode")
+  @UseGuards(JwtGuard)
+  async turnOnTwoFactorAuthentication(
+    @Param("intra_id") intra_id: string,
+    @Param("authCode") authCode: string
+  ) {
+    const isCodeValid = await this.authService.isTwoFactorAuthCodeValid(
+      authCode,
+      intra_id
     );
     if (!isCodeValid) {
-      throw new UnauthorizedException('Wrong authentication code');
+      return isCodeValid
     }
-    return this.authService.loginWith2fa(req.user);
+    await this.userService.turnOnTwoFactorAuth(intra_id);
+    return isCodeValid
   }
-  @Get('42-intranet/callback')
-  @UseGuards(AuthGuard('42-intranet'))
-  async callbackWith42(@Req() req: any,@Res() res: Response) { 
-    // console.log("profil howa niit ?? :",req.user);
-    const ret = await this.authService.valiadteUserAndCreateJWT(req.user);
-      // console.log(ret);
-      if (ret != null){
-        // res.cookie("auth",ret);
-      }
-      res.cookie('intra_id', req.user.accessToken);
-      res.cookie('access_token', ret.access_token);
-      // req.cookies(accessToken:'accessToken' ,JWT_SECRET);
-    res.redirect("http://localhost:3000/protected/settingspage");
-    // res.redirect("http://www.google.com"); 
-    // res.send(ret)
+
+
+  @Post("2fa/turn-off/:intra_id")
+  @UseGuards(JwtGuard)
+  async turnOffTwoFactorAuthentication(@Param("intra_id") intra_id: string) {
+    await this.userService.turnOffTwoFactorAuth(intra_id);
+  }
+
+  @Get("2fa/authenticate/:intra_id/:authCode")
+  @HttpCode(200)
+  async authenticate(
+    @Param("intra_id") intra_id: string,
+    @Param("authCode") authCode: string,
+  ) {
+    const isCodeValid = await this.authService.isTwoFactorAuthCodeValid(
+      authCode,
+      intra_id
+    );
+    if (!isCodeValid) {
+      return { isCodeValid, access_token: "" }
+    }
+    const ret = await this.authService.valiadteUserAndCreateJWT(intra_id);
+    return { isCodeValid, access_token: ret.access_token }
   }
 }
-
-//prisma
-//dto
-// jwt
-// guardes
-// pipes 

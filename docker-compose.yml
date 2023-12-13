@@ -1,44 +1,47 @@
-# version: '3.8'
-
-# services:
-#   backend:
-#     image: my-app-backend
-#     build:
-#       context: ./backend
-#     ports:
-#       - 5432:5432
-#     depends_on:
-#       - database
-#   frontend:
-#     image: my-app-frontend
-#     build:
-#       context: ./frontend
-#     ports:
-#       - "3001:3000"
-#   database:
-#     image: postgres:latest
-    
-#     environment:
-#       POSTGRES_USER: postgres
-#       POSTGRES_PASSWORD: 123
-#       POSTGRES_DB: postgres
-#   adminer:
-#     image: adminer
-#     ports:
-#       - 8080:8080
-
-
 version: '3.8'
+
 services:
+
   database:
-    image: postgres:13
-    ports:     
-      - 5432:5432
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1234
-      POSTGRES_DB: nest
+    container_name: app-database
+    image: postgres:13 
+    ports:
+      - '5432:5432'
+    env_file:
+      - .env
     networks:
-        - mynetwork
+      - mynetwork
+    volumes:
+      - ./database:/var/lib/postgresql/data
+    restart: always
+
+  backend:
+    container_name: app-backend
+    build: ./backend 
+    ports:
+      - '4000:4000' 
+    depends_on:
+      - database
+    networks:
+      - mynetwork
+    env_file:
+      - .env
+    restart: always
+
+  frontend:
+    container_name: app-frontend
+    build: ./frontend
+    ports:
+      - '3000:3000'
+    depends_on:
+      - backend
+    env_file:
+      - ./frontend/.env.local
+    restart: always
+
 networks:
-    mynetwork:
+  mynetwork:
+    driver: bridge
+
+
+
